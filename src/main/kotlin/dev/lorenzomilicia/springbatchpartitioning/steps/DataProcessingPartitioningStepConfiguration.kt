@@ -9,6 +9,8 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.io.FileSystemResource
 import org.springframework.core.io.Resource
+import org.springframework.core.task.SimpleAsyncTaskExecutor
+import org.springframework.core.task.TaskExecutor
 import java.io.File
 
 @Configuration
@@ -29,11 +31,18 @@ class DataProcessingPartitioningStepConfiguration(
         stepBuilder
             .get("dataProcessingMultipleFiles")
             .partitioner("fileProcessingStep", partitioner(resources))
+            .taskExecutor(taskExecutor())
             .step(dataProcessingStep)
             .build()
 
     private fun partitioner(resources: List<Resource>): Partitioner =
         MultiResourcePartitioner().apply {
             setResources(resources.toTypedArray())
+        }
+
+    private fun taskExecutor(): TaskExecutor =
+        SimpleAsyncTaskExecutor().apply {
+            concurrencyLimit = 5
+            setThreadNamePrefix("Thread-")
         }
 }
