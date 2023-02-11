@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Configuration
 @Configuration
 class SpringBatchPartitioningConfiguration(
 	private val jobBuilder: JobBuilderFactory,
-	@Qualifier("dataProcessingStep")
+	@Qualifier("dataProcessingPartitioningStep")
 	private val step: Step,
 ) {
 

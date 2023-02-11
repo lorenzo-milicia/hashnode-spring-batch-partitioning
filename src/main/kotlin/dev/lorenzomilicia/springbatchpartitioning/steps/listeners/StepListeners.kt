@@ -12,7 +12,8 @@ fun chunkListener(): ChunkListener =
 
         override fun afterChunk(context: ChunkContext) {
             val stepExecution = context.stepContext.stepExecution
-            log.info("Chunk finished - ReadCount=${stepExecution.readCount}, WriteCount=${stepExecution.writeCount}")
+            val fileName = (stepExecution.executionContext.get("fileName") as String).substringAfterLast('/')
+            log.info("Chunk finished - File=$fileName ReadCount=${stepExecution.readCount}, WriteCount=${stepExecution.writeCount}")
         }
 
         override fun afterChunkError(context: ChunkContext) {
