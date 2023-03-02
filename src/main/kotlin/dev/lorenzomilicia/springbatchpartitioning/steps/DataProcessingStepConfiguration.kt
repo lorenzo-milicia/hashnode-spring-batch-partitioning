@@ -11,12 +11,16 @@ import org.springframework.batch.core.configuration.annotation.StepScope
 import org.springframework.batch.item.ItemProcessor
 import org.springframework.batch.item.file.FlatFileItemReader
 import org.springframework.batch.item.file.FlatFileItemWriter
+import org.springframework.batch.item.support.SynchronizedItemStreamReader
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.io.FileSystemResource
 import org.springframework.core.io.UrlResource
+import org.springframework.core.task.SimpleAsyncTaskExecutor
+import org.springframework.core.task.TaskExecutor
+import java.lang.RuntimeException
 
 @Configuration
 class DataProcessingStepConfiguration(
@@ -29,28 +33,31 @@ class DataProcessingStepConfiguration(
         stepBuilder
             .get("dataProcessingSingleFile")
             .chunk<CountryRawData, CountrySummedData>(10)
-            .reader(reader(""))
+            .reader(synchronizedReader(""))
             .processor(processor())
             .writer(writer(""))
             .listener(chunkListener())
+            .taskExecutor(taskExecutor())
+            .throttleLimit(8)
             .build()
 
-    @Bean
-    @StepScope
-    fun reader(@Value("#{stepExecutionContext[fileName]}") pathToFile: String): FlatFileItemReader<CountryRawData> =
+//    @Bean
+//    @StepScope
+    fun reader(/*@Value("#{stepExecutionContext[fileName]}")*/ pathToFile: String): FlatFileItemReader<CountryRawData> =
         FlatFileItemReader<CountryRawData>()
             .apply {
                 setResource(UrlResource(pathToFile))
                 setLinesToSkip(1)
+                isSaveState = false
                 setLineMapper { line, _ ->
-                    Thread.sleep(50)
+                    if (line == "BOOM!") throw RuntimeException(line)
                     line.toDomain()
                 }
             }
 
     fun processor(): ItemProcessor<CountryRawData, CountrySummedData> =
         ItemProcessor { (countryName, yearlyData) ->
-            Thread.sleep(10)
+            Thread.sleep(50)
             CountrySummedData(
                 countryName = countryName,
                 totalAmount = yearlyData.sumOf { it }
@@ -62,10 +69,18 @@ class DataProcessingStepConfiguration(
     fun writer(@Value("#{stepExecutionContext[fileName]}") pathToFile: String): FlatFileItemWriter<CountrySummedData> =
         FlatFileItemWriter<CountrySummedData>().apply {
             setResource(FileSystemResource("exportedData/output_${pathToFile.substringAfterLast('/')}.txt"))
-            setAppendAllowed(true)
+            setAppendAllowed(false)
             setLineAggregator {
                 it.toOutputText()
             }
         }
 
+    @Bean
+    @StepScope
+    fun synchronizedReader(@Value("#{stepExecutionContext[fileName]}") pathToFile: String): SynchronizedItemStreamReader<CountryRawData> =
+        SynchronizedItemStreamReader<CountryRawData>().apply {
+            setDelegate(reader(pathToFile))
+        }
+
+    private fun taskExecutor(): TaskExecutor = SimpleAsyncTaskExecutor().apply { concurrencyLimit = 8 }
 }
